@@ -1,0 +1,7 @@
+Analyze this meeting transcript and create a summary with:
+- Participants
+- Main discussion points
+- Action items with owners
+- Overall summary
+
+Language: {language}
