@@ -1,4 +1,4 @@
-"""Audio transcription using LiteLLM (OpenAI Whisper)."""
+"""Audio transcription using LiteLLM."""
 
 import logging
 import subprocess
@@ -11,11 +11,13 @@ from voxum.config import get_config
 
 logger = logging.getLogger(__name__)
 
-MAX_FILE_SIZE = 24 * 1024 * 1024  # 24MB (leave margin below 25MB API limit)
 
+def _compress_audio(file_path: Path, bitrate: str) -> Path:
+    """Compress audio to mp3 for smaller file size.
 
-def _compress_audio(file_path: Path) -> Path:
-    """Compress audio to 64kbps mp3 for smaller file size.
+    Args:
+        file_path: Path to the audio file
+        bitrate: Audio bitrate (e.g., "40k")
 
     Returns path to compressed temp file.
     """
@@ -30,7 +32,7 @@ def _compress_audio(file_path: Path) -> Path:
             "ffmpeg", "-y", "-i", str(file_path),
             "-ac", "1",           # mono
             "-ar", "16000",       # 16kHz sample rate (sufficient for speech)
-            "-b:a", "40k",        # 40kbps bitrate
+            "-b:a", bitrate,
             str(temp_path)
         ],
         check=True,
@@ -45,9 +47,10 @@ def _compress_audio(file_path: Path) -> Path:
 
 
 def transcribe_file(file_path: Path) -> str:
-    """Transcribe an audio file using OpenAI Whisper via LiteLLM.
+    """Transcribe an audio file using LiteLLM.
 
-    Automatically compresses files larger than 24MB.
+    Supports OpenAI Whisper and Groq models.
+    Automatically compresses files larger than the configured max size.
 
     Args:
         file_path: Path to the audio file
@@ -58,12 +61,13 @@ def transcribe_file(file_path: Path) -> str:
     config = get_config()
     temp_path = None
 
+    max_file_size = config.transcription_max_file_size_mb * 1024 * 1024
     file_size = file_path.stat().st_size
-    if file_size > MAX_FILE_SIZE:
+    if file_size > max_file_size:
         logger.warning(
             f"File size ({file_size / (1024*1024):.1f}MB) exceeds limit, compressing..."
         )
-        temp_path = _compress_audio(file_path)
+        temp_path = _compress_audio(file_path, config.transcription_audio_bitrate)
         file_path = temp_path
 
     try:
@@ -74,8 +78,8 @@ def transcribe_file(file_path: Path) -> str:
                 model=config.transcription_model,
                 file=audio_file,
             )
-
         transcript = response.text
+
         logger.info(f"Transcription complete ({len(transcript)} chars)")
 
         return transcript

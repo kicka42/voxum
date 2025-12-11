@@ -27,6 +27,9 @@ class Config:
     # App settings
     summary_language: str
     poll_interval_seconds: int
+    voxum_state_dir: Path
+    transcription_max_file_size_mb: int
+    transcription_audio_bitrate: str
 
 
 class ConfigError(Exception):
@@ -65,13 +68,20 @@ def load_config() -> Config:
         google_client_secrets_path=Path(
             get_optional("GOOGLE_CLIENT_SECRETS_PATH", "client_secrets.json")
         ),
-        transcription_model=get_optional("TRANSCRIPTION_MODEL", "whisper-1"),
+        transcription_model=get_optional("TRANSCRIPTION_MODEL", "groq/whisper-large-v3-turbo"),
         summarization_model=get_optional("SUMMARIZATION_MODEL", "gpt-4o-mini"),
         resend_api_key=get_required("RESEND_API_KEY"),
         email_to=get_required("EMAIL_TO"),
         email_from=get_required("EMAIL_FROM"),
         summary_language=get_optional("SUMMARY_LANGUAGE", "en"),
         poll_interval_seconds=int(get_optional("POLL_INTERVAL_SECONDS", "60")),
+        voxum_state_dir=Path(
+            get_optional("VOXUM_STATE_DIR", str(Path.home() / ".voxum"))
+        ),
+        transcription_max_file_size_mb=int(
+            get_optional("TRANSCRIPTION_MAX_FILE_SIZE_MB", "24")
+        ),
+        transcription_audio_bitrate=get_optional("TRANSCRIPTION_AUDIO_BITRATE", "40k"),
     )
 
     if missing:

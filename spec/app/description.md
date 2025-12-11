@@ -1,11 +1,18 @@
 # Voxum
 
-Voxum is a voice meeting summarizer.
+Voxum is a modular agent-based CLI tool that turns meeting recordings into actionable summaries.
 
-When you drop an audio recording (like a meeting or call) into a Google Drive folder, it automatically:
+## What it does
 
-1. Transcribes the audio (figuring out who said what)
-2. Creates a summary report with the main points, action items, and key takeaways
-3. Emails you the summary along with the full transcript
+Drop an audio file into a Google Drive folder (or process locally), and Voxum will:
 
-Essentially - record your meetings, get a neat summary in your inbox without lifting a finger.
+1. **Transcribe** the audio using Whisper (via Groq or OpenAI)
+2. **Summarize** the transcript with an LLM — extracting participants, key points, and action items
+3. **Deliver** the summary to your inbox and save it alongside the original file in Drive
+
+## Modes
+
+- **Watch mode**: Runs as a background service, polling Google Drive for new audio files
+- **Manual mode**: Process a single local file via `voxum process <file>`
+
+Record your meetings, get summaries in your inbox — no manual effort required.

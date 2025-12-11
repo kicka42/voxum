@@ -17,8 +17,16 @@ from voxum.config import get_config
 logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
-TOKEN_FILE = Path.home() / ".voxum" / "token.json"
-PROCESSED_FILE = Path.home() / ".voxum" / "processed.json"
+
+
+def _get_token_file() -> Path:
+    """Get path to token file from config."""
+    return get_config().voxum_state_dir / "token.json"
+
+
+def _get_processed_file() -> Path:
+    """Get path to processed file from config."""
+    return get_config().voxum_state_dir / "processed.json"
 
 AUDIO_MIME_TYPES = [
     "audio/mpeg",
@@ -34,8 +42,8 @@ AUDIO_MIME_TYPES = [
 
 
 def _ensure_voxum_dir() -> None:
-    """Ensure ~/.voxum directory exists."""
-    TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    """Ensure voxum state directory exists."""
+    get_config().voxum_state_dir.mkdir(parents=True, exist_ok=True)
 
 
 def authenticate() -> Credentials:
@@ -50,9 +58,10 @@ def authenticate() -> Credentials:
     _ensure_voxum_dir()
     config = get_config()
     creds = None
+    token_file = _get_token_file()
 
-    if TOKEN_FILE.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
+    if token_file.exists():
+        creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -65,8 +74,8 @@ def authenticate() -> Credentials:
             )
             creds = flow.run_local_server(port=0)
 
-        TOKEN_FILE.write_text(creds.to_json())
-        logger.info(f"Credentials saved to {TOKEN_FILE}")
+        token_file.write_text(creds.to_json())
+        logger.info(f"Credentials saved to {token_file}")
 
     return creds
 
@@ -186,11 +195,12 @@ def get_processed_files() -> set[str]:
         Set of file IDs that have been processed
     """
     _ensure_voxum_dir()
+    processed_file = _get_processed_file()
 
-    if not PROCESSED_FILE.exists():
+    if not processed_file.exists():
         return set()
 
-    data = json.loads(PROCESSED_FILE.read_text())
+    data = json.loads(processed_file.read_text())
     return set(data.get("processed", []))
 
 
@@ -204,7 +214,8 @@ def mark_processed(file_id: str) -> None:
     processed = get_processed_files()
     processed.add(file_id)
 
-    PROCESSED_FILE.write_text(json.dumps({"processed": list(processed)}))
+    processed_file = _get_processed_file()
+    processed_file.write_text(json.dumps({"processed": list(processed)}))
     logger.debug(f"Marked {file_id} as processed")
 
 

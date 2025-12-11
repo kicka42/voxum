@@ -2,60 +2,78 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build and Run Commands
+## Project Overview
+
+Voxum is a voice meeting summarizer CLI. It watches a Google Drive folder for audio files, transcribes them, generates summaries, and delivers results via email.
+
+## Commands
 
 ```bash
-# Install (editable mode for development)
+# Install (development mode)
 pip install -e .
 
 # Run CLI commands
-voxum auth              # OAuth with Google Drive
-voxum config            # Show current configuration
-voxum process <file>    # Process a local audio file
-voxum watch             # Start Drive folder watcher
+voxum version              # Show version
+voxum auth                 # OAuth flow for Google Drive
+voxum config               # Show current configuration
+voxum process <file>       # Process a local audio file
+voxum watch                # Start background watcher (polls Drive folder)
 
-# Enable verbose logging
+# Verbose mode (any command)
 voxum -v <command>
 ```
 
 ## Architecture
 
-Voxum is a voice meeting summarizer CLI that processes audio files through a three-stage agent pipeline.
-
 ### Pipeline Flow
-
 ```
-Audio File → TranscriberAgent → SummarizerAgent → DeliveryAgent → (Drive + Email)
+Audio File → TranscriberAgent → SummarizerAgent → DeliveryAgent → Email + Drive
 ```
 
-The `Orchestrator` (`voxum/orchestrator.py`) coordinates the pipeline, calling each agent in sequence and handling errors at each stage.
+The `Orchestrator` (`voxum/orchestrator.py`) coordinates the three-stage pipeline.
 
 ### Agent Pattern
+All agents inherit from `BaseAgent` (`voxum/agents/base.py`):
+- Generic typed interface: `BaseAgent[InputT, OutputT]`
+- Override `_process()` method for implementation
+- `process()` wraps with error handling and returns `AgentResult`
+- Prompts loaded from `voxum/prompts/*.txt` via `load_prompt()`
 
-All agents inherit from `BaseAgent` (`voxum/agents/base.py`), which provides:
-- Generic `AgentResult[OutputT]` return type with success/error handling
-- Automatic logging via `self.logger`
-- Prompt loading from `voxum/prompts/` directory via `load_prompt(name)`
+### Agents
+- `TranscriberAgent`: Audio → text using LiteLLM transcription API
+- `SummarizerAgent`: Transcript → structured summary using LiteLLM completion
+- `DeliveryAgent`: Uploads summary to Drive, sends email via Resend
 
-Each agent defines typed `Input` and `Output` dataclasses and implements `_process()`.
-
-### Tools Layer
-
-Tools in `voxum/tools/` are stateless utility modules:
-- `drive.py` - Google Drive API (auth, list, download, upload, processed tracking)
-- `email.py` - Resend API for sending summaries
-- `transcription.py` - LiteLLM wrapper for Whisper transcription
+### Tools
+- `voxum/tools/drive.py`: Google Drive API (OAuth, list/download/upload files, processed tracking)
+- `voxum/tools/email.py`: Resend email sending
+- `voxum/tools/transcription.py`: LiteLLM transcription with auto-compression (ffmpeg) for files >24MB
 
 ### Configuration
+Environment variables loaded from `.env` via `voxum/config.py`:
 
-Config loaded from environment variables via `voxum/config.py`. Use `get_config()` singleton accessor. Required vars: `GOOGLE_DRIVE_FOLDER_ID`, `RESEND_API_KEY`, `EMAIL_TO`, `EMAIL_FROM`. LLM API keys: Set provider-specific keys (e.g., `OPENAI_API_KEY`, `GEMINI_API_KEY`) - LiteLLM auto-detects these.
+Required:
+- `GOOGLE_DRIVE_FOLDER_ID`
+- `RESEND_API_KEY`
+- `EMAIL_TO`
+- `EMAIL_FROM`
 
-### State Files
+Optional (with defaults):
+- `GOOGLE_CLIENT_SECRETS_PATH` (default: `client_secrets.json`)
+- `TRANSCRIPTION_MODEL` (default: `groq/whisper-large-v3-turbo`)
+- `SUMMARIZATION_MODEL` (default: `gpt-4o-mini`)
+- `SUMMARY_LANGUAGE` (default: `en`)
+- `POLL_INTERVAL_SECONDS` (default: `60`)
+- `VOXUM_STATE_DIR` (default: `~/.voxum`)
+- `TRANSCRIPTION_MAX_FILE_SIZE_MB` (default: `24`)
+- `TRANSCRIPTION_AUDIO_BITRATE` (default: `40k`)
 
-Stored in `~/.voxum/`:
-- `token.json` - Google OAuth credentials
-- `processed.json` - IDs of already-processed Drive files
+LLM API keys (e.g., `OPENAI_API_KEY`, `GROQ_API_KEY`) are read by LiteLLM from environment.
 
-### Watcher
+### State Storage
+Stored in `VOXUM_STATE_DIR` (default: `~/.voxum`):
+- `token.json`: Google OAuth credentials
+- `processed.json`: Tracking of processed file IDs
 
-`voxum/watcher.py` uses APScheduler to poll Google Drive at configurable intervals. Filters for audio MIME types and skips already-processed files.
+## External Dependencies
+- **ffmpeg**: Required for audio compression (must be installed on system)
